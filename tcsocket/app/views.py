@@ -60,7 +60,10 @@ VIEW_SCHEMAS = {
 
         t.Key('last_updated', optional=True): t.Or(t.Null | t.String >> dt_parse),
         t.Key('photo', optional=True): t.Or(t.Null | t.URL),
-    })
+    }),
+    'enquiry-create': t.Dict({
+        t.Key('name', optional=True): t.String(min_length=4, max_length=63),
+    }),
 }
 VIEW_SCHEMAS['contractor-set'].ignore_extra('*')
 
@@ -265,7 +268,7 @@ async def contractor_set(request):
         )
     status, status_text = (201, 'created') if r.action == Action.insert else (200, 'updated')
     await _set_skills(conn, con_id, skills)
-    photo and await request.app['image_worker'].get_image(request['company'].public_key, con_id, photo)
+    photo and await request.app['request_worker'].get_image(request['company'].public_key, con_id, photo)
     logger.info('%s contractor on %s', status_text, request['company'].public_key)
     return pretty_json_response(
         status_=status,
@@ -394,3 +397,15 @@ async def contractor_get(request):
         extra_attributes=con.extra_attributes,
         skills=await _get_skills(conn, con_id)
     )
+
+
+async def enquiry_get(request):
+    async with request.app['redis_pool'].get() as redis:
+        v = await redis.get('boom')
+    return Response(text=f'v = "{v and v.decode()}"\n', content_type='text/plain')
+
+
+async def enquiry_create(request):
+    async with request.app['redis_pool'].get() as redis:
+        await redis.set('boom', f'{datetime.now():%H:%M:%S}')
+    return Response(content_type='text/plain')

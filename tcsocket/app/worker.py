@@ -12,8 +12,11 @@ CHUNK_SIZE = int(1e4)
 SIZE_LARGE = 1000, 1000
 SIZE_SMALL = 256, 256
 
+ENQUIRY_URL = 'https://secure.tutorcruncher.com/api/enquiry/'
+CT_JSON = 'application/json'
 
-class ImageActor(Actor):
+
+class RequestActor(Actor):
     def __init__(self, *, settings=None, **kwargs):
         self.settings = settings or load_settings()
         kwargs['redis_settings'] = RedisSettings(**self.settings['redis'])
@@ -46,13 +49,24 @@ class ImageActor(Actor):
                 img_large.save(path_str + '.thumb.jpg', 'JPEG')
         return 200
 
+    @concurrent
+    async def get_enquiry_options(self, public_key, private_key):
+        headers = {
+            'Accept': CT_JSON,
+            'Authorization': 'Token ' + private_key,
+        }
+        async with self.session.options(ENQUIRY_URL, headers=headers) as r:
+            print(f'status: {r.status}')
+            obj = await r.json()
+            print(f'response: {obj}')
+
     async def close(self):
         await super().close()
         await self.session.close()
 
 
 class Worker(BaseWorker):
-    shadows = [ImageActor]
+    shadows = [RequestActor]
 
     def __init__(self, **kwargs):
         kwargs['redis_settings'] = RedisSettings(**load_settings()['redis'])

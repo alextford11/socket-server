@@ -7,8 +7,9 @@ from sqlalchemy.engine.url import URL
 
 from .middleware import middleware
 from .settings import THIS_DIR, load_settings
-from .views import company_create, company_list, contractor_get, contractor_list, contractor_set, index
-from .worker import ImageActor
+from .views import (company_create, company_list, contractor_get, contractor_list, contractor_set,
+                    enquiry_create, enquiry_get, index)
+from .worker import RequestActor
 
 
 def pg_dsn(db_settings: dict) -> str:
@@ -27,16 +28,18 @@ def pg_dsn(db_settings: dict) -> str:
 
 
 async def startup(app: web.Application):
+    request_worker = RequestActor(settings=app['settings'])
     app.update(
         pg_engine=await create_engine(pg_dsn(app['database']), loop=app.loop),
-        image_worker=ImageActor(settings=app['settings']),
+        request_worker=request_worker,
+        redis_pool=await request_worker.get_redis_pool(),
     )
 
 
 async def cleanup(app: web.Application):
     app['pg_engine'].close()
     await app['pg_engine'].wait_closed()
-    await app['image_worker'].close()
+    await app['request_worker'].close()
 
 
 def setup_routes(app):
@@ -47,6 +50,8 @@ def setup_routes(app):
     app.router.add_post('/{company}/contractors/set', contractor_set, name='contractor-set')
     app.router.add_get('/{company}/contractors', contractor_list, name='contractor-list')
     app.router.add_get('/{company}/contractors/{id:\d+}', contractor_get, name='contractor-get')
+    app.router.add_get('/{company}/enquiry', enquiry_get, name='enquiry-get')
+    app.router.add_post('/{company}/enquiry', enquiry_create, name='enquiry-create')
 
 
 def create_app(loop, *, settings=None):
